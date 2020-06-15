@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use LINE\LINEBot;
+use LINE\LINEBot\Event\MessageEvent\TextMessage;
 use LINE\LINEBot\HTTPClient\CurlHTTPClient;
 
 class LineBotController extends Controller
@@ -15,11 +16,25 @@ class LineBotController extends Controller
         Log::debug($request->input());
 
         $httpClient = new CurlHTTPClient(env('LINE_ACCESS_TOKEN'));
-        $linebot = new LINEBot($httpClient, ['channelSecret' => env('LINE_CHANNEL_SECRET')]);
+        $lineBot = new LINEBot($httpClient, ['channelSecret' => env('LINE_CHANNEL_SECRET')]);
 
         $signature = $request->header('x-line-signature');
-        if (!$linebot->validateSignature($request->getContent(), $signature)) {
+        if (!$lineBot->validateSignature($request->getContent(), $signature)) {
             abort(400, 'Invalid signatue');
+        }
+
+        $events = $lineBot->parseEventRequest($request->getContent(), $signature);
+
+        Log::debug($events);
+
+        foreach ($events as $event) {
+            if (!($event instanceof TextMessage)) {
+                Log::debug('non text message has come');
+                continue;
+            }
+            $replyToken = $event->getReplyToken();
+            $replyText = $event->getText();
+            $lineBot->replyText($replyToken, $replyText);
         }
     }
 }
